@@ -4,7 +4,7 @@ A CNN-based facial emotion recognition system detects five emotions (Happy, Sad,
 ## Features
 - Detects facial emotions in real time
 - Shows interactive bar graph
-- Lightweight Flask backend
+- Recogise your face 
 
 ## Requirements
 - Python 3.10+
