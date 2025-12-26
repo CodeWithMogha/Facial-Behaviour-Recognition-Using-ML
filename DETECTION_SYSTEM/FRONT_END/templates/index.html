@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facial Behavior Recognition Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Left Side -->
+        <div class="left-side">
+            <div class="box graph-box">
+                <h2>Your Emotional Graph</h2>
+                <canvas id="emotionChart" width="400" height="300"></canvas>
+            </div>
+
+            <div class="box log-box">
+                <h3>User Log</h3>
+                <p id="currentTimeLog"></p>
+                <ul id="logList" style="margin-top: 10px; padding-left: 16px;"></ul>
+            </div>
+        </div>
+
+        <!-- Right Side -->
+        <div class="right-side">
+            <div class="box camera-box">
+                <img id="flaskVideoFeed" src="{{ url_for('video_feed') }}" alt="Webcam Feed" style="width: 100%; max-width: 640px; height: auto; border-radius: 10px;" />
+                <img id="imageUploadPreview" alt="Uploaded Image Preview" style="display:none;" />
+                <div id="cameraOffMessage" class="camera-off-message">Camera is not on or feed stopped.</div>
+
+                <div class="button-area">
+                    <button onclick="startFlaskCamera()">Start Camera</button>
+                    <button onclick="stopFlaskCamera()">Stop Camera</button>
+                    <button onclick="uploadImage()">Upload Image</button>
+                    <input type="file" id="imageUpload" accept="image/*">
+                </div>
+            </div>
+
+            <div class="box prediction-box">
+                <h3>Prediction</h3>
+                <p id="predictionText">Detecting emotion...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Real-time Chart Logic -->
+    <script src="{{ url_for('static', filename='chart.js') }}"></script>
+
+    <!-- Control & Log Fetcher -->
+    <script>
+        const flaskVideoFeed = document.getElementById('flaskVideoFeed');
+        const imageInput = document.getElementById('imageUpload');
+        const imagePreview = document.getElementById('imageUploadPreview');
+        const cameraOffMessage = document.getElementById('cameraOffMessage');
+
+        function updateDisplay(mode) {
+            flaskVideoFeed.style.display = 'none';
+            imagePreview.style.display = 'none';
+            cameraOffMessage.style.display = 'none';
+
+            if (mode === 'flask_video') {
+                flaskVideoFeed.style.display = 'block';
+            } else if (mode === 'image_preview') {
+                imagePreview.style.display = 'block';
+            } else if (mode === 'camera_off') {
+                cameraOffMessage.style.display = 'flex';
+            }
+        }
+
+        function startFlaskCamera() {
+            flaskVideoFeed.src = "{{ url_for('video_feed') }}";
+            updateDisplay('flask_video');
+        }
+
+        function stopFlaskCamera() {
+            flaskVideoFeed.src = "";
+            updateDisplay('camera_off');
+
+            fetch('/stop_feed')
+                .then(response => {
+                    if (response.ok) {
+                        console.log('✅ Camera stopped.');
+                    } else {
+                        console.error('❌ Failed to stop camera.');
+                    }
+                })
+                .catch(error => console.error('❌ Stop error:', error));
+        }
+
+        function uploadImage() {
+            imageInput.click();
+        }
+
+        imageInput.addEventListener('change', function () {
+            const file = this.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    stopFlaskCamera();
+                    imagePreview.src = e.target.result;
+                    updateDisplay('image_preview');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // ✅ Update live emotion prediction text
+        function updateEmotionPrediction() {
+            fetch('/get_emotion')
+                .then(response => response.json())
+                .then(data => {
+                    const emotion = data.emotion;
+                    const emojiMap = {
+                        "Happy": "😄", "Sad": "😢", "Angry": "😠",
+                        "Surprise": "😲", "Neutral": "😐", "Fear": "😱", "Disgust": "🤢"
+                    };
+                    const emoji = emojiMap[emotion] || "";
+                    document.getElementById("predictionText").textContent = `You look ${emotion} ${emoji}`;
+                })
+                .catch(error => console.error('Emotion fetch error:', error));
+        }
+
+        // ✅ Update logs
+        function updateLogs() {
+            fetch('/get_user_log')
+                .then(response => response.json())
+                .then(data => {
+                    const logList = document.getElementById('logList');
+                    logList.innerHTML = '';
+                    data.forEach(log => {
+                        const li = document.createElement('li');
+                        li.textContent = `${log.name} | ${log.emotion} | ${log.time} | ${log.day}, ${log.date}`;
+                        logList.appendChild(li);
+                    });
+                })
+                .catch(error => console.error('Log fetch error:', error));
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDisplay('camera_off');
+            updateEmotionPrediction();
+            updateLogs();
+
+            const currentTimeLog = document.getElementById('currentTimeLog');
+            const now = new Date();
+            const options = {
+                year: 'numeric', month: 'long', day: 'numeric',
+                hour: 'numeric', minute: 'numeric', second: 'numeric',
+                hour12: true, timeZoneName: 'short'
+            };
+            currentTimeLog.textContent = `Current Time: ${now.toLocaleString('en-US', options)}`;
+        });
+
+        setInterval(updateEmotionPrediction, 2000); // every 2 sec
+        setInterval(updateLogs, 10000); // every 10 sec
+    </script>
+</body>
+</html>
